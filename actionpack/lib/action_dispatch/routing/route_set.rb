@@ -484,6 +484,7 @@ module ActionDispatch
       def finalize!
         return if @finalized
         @append.each { |blk| eval_block(blk) }
+        @append.clear
         @finalized = true
       end
 

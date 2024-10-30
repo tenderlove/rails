@@ -61,7 +61,7 @@ module Rails
 
       def load_paths
         paths.each { |path| load(path) }
-        run_after_load_paths.call
+        run_after_load_paths&.call
       end
 
       def run_after_load_paths

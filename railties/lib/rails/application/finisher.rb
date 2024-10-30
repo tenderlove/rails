@@ -147,6 +147,7 @@ module Rails
           end
 
           routes_reloader.run_after_load_paths = -> do
+            routes_reloader.run_after_load_paths = nil
             app.routes.append do
               get "/" => "rails/welcome#index", internal: true
             end
