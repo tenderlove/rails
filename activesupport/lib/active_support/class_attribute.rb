@@ -4,7 +4,11 @@ module ActiveSupport
   module ClassAttribute # :nodoc:
     class << self
       def redefine(owner, name, namespaced_name, value)
+        reader = "def #{namespaced_name}; defined?(@#{namespaced_name}) ? @#{namespaced_name} : superclass.#{namespaced_name}; end"
+        owner.instance_variable_set("@#{namespaced_name}", value)
+
         if owner.singleton_class?
+          raise NotImplementedError
           if owner.attached_object.is_a?(Module)
             redefine_method(owner, namespaced_name, private: true) { value }
           else
@@ -12,11 +16,13 @@ module ActiveSupport
           end
         end
 
-        redefine_method(owner.singleton_class, namespaced_name, private: true) { value }
+        owner.instance_eval(reader)
+        #redefine_method(owner.singleton_class, namespaced_name, private: true) { value }
 
         redefine_method(owner.singleton_class, "#{namespaced_name}=", private: true) do |new_value|
           if owner.equal?(self)
-            value = new_value
+            owner.instance_variable_set("@#{namespaced_name}", new_value)
+            #value = new_value
           else
             ::ActiveSupport::ClassAttribute.redefine(self, name, namespaced_name, new_value)
           end

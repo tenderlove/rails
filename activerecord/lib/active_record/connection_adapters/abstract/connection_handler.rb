@@ -76,6 +76,7 @@ module ActiveRecord
       def initialize
         # These caches are keyed by pool_config.connection_name (PoolConfig#connection_name).
         @connection_name_to_pool_manager = Concurrent::Map.new(initial_capacity: 2)
+        freeze
       end
 
       def prevent_writes # :nodoc:

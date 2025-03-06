@@ -46,9 +46,64 @@ module ActiveRecord
     class SQLite3Adapter < AbstractAdapter
       ADAPTER_NAME = "SQLite"
 
+      class RactorDB
+        def self.new(db_name, config)
+          super Ractor.new(db_name) { |name|
+            raw_connection = ::SQLite3::Database.new name
+
+            loop do
+              channel, method_name, args = Ractor.receive
+              if method_name == :query
+                sql, binds, type_casted_binds, type_map = *args
+
+                stmt = raw_connection.prepare(sql)
+
+                begin
+                  unless binds.nil? || binds.empty?
+                    stmt.bind_params(type_casted_binds)
+                  end
+                  result = if stmt.column_count.zero? # No return
+                    stmt.step
+                    ActiveRecord::Result.empty
+                  else
+                    #ActiveRecord::Result.new(stmt.columns, stmt.to_a, stmt.types.map { |t| type_map.lookup(t) })
+                    ActiveRecord::Result.new(stmt.columns, stmt.to_a, nil)
+                  end
+                ensure
+                  stmt.close
+                end
+
+                channel.send result
+              else
+                channel.send raw_connection.send(method_name, *args)
+              end
+            end
+          }
+        end
+
+        def initialize(ractor)
+          @ractor = ractor
+          freeze
+        end
+
+        def query(sql, binds, type_casted_binds, type_map)
+          channel = Ractor.new { Ractor.receive }
+          @ractor.send([channel, :query, sql, binds, type_casted_binds, nil])
+          channel.take
+        end
+
+        def method_missing(method_name, *args)
+          puts "CALLING #{method_name}"
+          #raw_connection.send(method_name, ...)
+          channel = Ractor.new { Ractor.receive }
+          @ractor.send([channel, method_name, args])
+          channel.take
+        end
+      end
+
       class << self
         def new_client(config)
-          ::SQLite3::Database.new(config[:database].to_s, config)
+          RactorDB.new(config[:database].to_s, config)
         rescue Errno::ENOENT => error
           if error.message.include?("No such file or directory")
             raise ActiveRecord::NoDatabaseError

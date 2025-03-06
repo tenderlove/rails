@@ -76,7 +76,9 @@ module ActiveRecord
           end
 
           def perform_query(raw_connection, sql, binds, type_casted_binds, prepare:, notification_payload:, batch: false)
-            if batch
+            if true
+              result = raw_connection.query(sql, binds, type_casted_binds, type_map)
+            elsif batch
               raw_connection.execute_batch2(sql)
             elsif prepare
               stmt = @statements[sql] ||= raw_connection.prepare(sql)
@@ -106,7 +108,7 @@ module ActiveRecord
                 stmt.close
               end
             end
-            @last_affected_rows = raw_connection.changes
+            @last_affected_rows = nil #raw_connection.changes
             verified!
 
             notification_payload[:affected_rows] = @last_affected_rows
