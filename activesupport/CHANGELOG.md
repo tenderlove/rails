@@ -1,3 +1,8 @@
+*   Allow `active_support/descendants_tracker` to be required directly after
+    `ActiveSupport::WeakSet` was extracted into its own file.
+
+    *Nikita Vasilevsky*
+
 *   Skip building `ActiveSupport::EventReporter` events that no subscriber would consume.
 
     Subscribers can define `consumes?(name)` to say whether they would act on an
