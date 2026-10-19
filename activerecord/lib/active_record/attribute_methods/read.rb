@@ -15,27 +15,22 @@ module ActiveRecord
 
         private
           def define_method_attribute(canonical_name, owner:, as: canonical_name)
-            # Don't load the schema here, methods can be defined on classes
-            # without a table (e.g. alias_attribute on an abstract class).
-            slot = attributes_builder.indexes[canonical_name] if schema_loaded?
+            slot = attributes_builder.indexes[canonical_name]
+            unless slot
+              raise ArgumentError, "#{self.name} has no attribute `#{canonical_name}` to define a reader for"
+            end
 
             # Generated methods are cached by name and shared between models,
-            # so readers that embed a slot are cached per slot.
-            namespace = slot ? :"active_record_slot_#{slot}" : :active_record
+            # so they're cached per slot.
+            namespace = :"active_record_slot_#{slot}"
 
             ActiveModel::AttributeMethods::AttrNames.define_attribute_accessor_method(
               canonical_name
-            ) do |temp_method_name, attr_name_expr|
-              read = if slot
-                "_read_attribute_at!(#{slot})"
-              else
-                "_read_attribute!(#{attr_name_expr})"
-              end
-
+            ) do |temp_method_name|
               owner.define_cached_method(temp_method_name, as: as, namespace: namespace) do |batch|
                 batch <<
                   "def #{temp_method_name}" <<
-                  "  #{read}" <<
+                  "  _read_attribute_at!(#{slot})" <<
                   "end"
               end
             end
@@ -65,23 +60,15 @@ module ActiveRecord
         @attributes.fetch_value(attr_name)
       end
 
-      # Internal read without alias resolution that raises for uninitialized attributes.
-      def _read_attribute!(attr_name) # :nodoc:
-        @attributes.fetch_value!(attr_name)
-      rescue ActiveModel::MissingAttributeError
-        raise if @attributes.key?(attr_name)
-        missing_attribute(attr_name, RUBY_VERSION >= "3.4" ? caller_locations : caller)
-      end
-
       # Like #_read_attribute, but a missing attribute raises
       # ActiveModel::MissingAttributeError.
       def _read_attr(attr_name) # :nodoc:
         @attributes.fetch_value!(attr_name)
       end
 
-      # Like #_read_attribute!, but takes the attribute's +index+ (its
-      # slot) instead of its name. Called by the generated reader
-      # methods for attributes that have a column.
+      # Like #_read_attribute, but takes the attribute's +index+ (its slot)
+      # instead of its name, and raises for uninitialized attributes. Called
+      # by the generated reader methods.
       def _read_attribute_at!(index) # :nodoc:
         @attributes.fetch_value_at!(index)
       rescue ActiveModel::MissingAttributeError
